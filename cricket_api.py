@@ -1,3 +1,4 @@
+# cricket_api.py
 import requests
 
 class CricketAPI:
@@ -13,10 +14,11 @@ class CricketAPI:
             data = response.json()
 
             if data.get("status") != "success":
-                raise Exception("API returned an error")
+                raise ValueError("Failed to fetch data from API")
 
-            matches = data.get("data", [])
-            return matches
+            return data.get("data", [])
         except Exception as e:
-            print(f"[ERROR] Failed to fetch live matches: {e}")
+            print(f"[ERROR] Unable to get live matches: {e}")
             return []
+
+
