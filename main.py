@@ -1,129 +1,140 @@
+# main.py
 import streamlit as st
 from cricket_api import CricketAPI
 from cricket_prediction_engine import CricketPredictionEngine
 
-# Replace with your actual API key
+# Replace this with your CricAPI key
 API_KEY = "YOUR_API_KEY_HERE"
 
-cricket_api = CricketAPI(api_key=API_KEY)
+# Initialize API and prediction engine
+cricket_api = CricketAPI(API_KEY)
 prediction_engine = CricketPredictionEngine()
 
-st.set_page_config(page_title="Live Cricket Dashboard", layout="wide")
-st.title("🏏 Live Cricket Score & Prediction Dashboard")
+st.set_page_config(page_title="Cricket Dashboard", layout="wide")
+st.title("🏏 Live Cricket Score & Player Prediction")
 
-# Sidebar
-st.sidebar.title("Navigation")
-page = st.sidebar.radio("Go to", ["Live Matches", "Top 11 Predictor", "Match Details", "Custom Player Prediction"])
+# Sidebar navigation
+st.sidebar.title("Navigate")
+selected_page = st.sidebar.radio("Select Page", [
+    "Live Matches", "Top 11 Predictor", "Match Details", "Custom Player Prediction"
+])
 
 @st.cache_data(ttl=60)
-def get_cached_matches():
+def fetch_live_matches():
     return cricket_api.get_live_matches()
 
-def show_live_matches():
-    st.header("📺 Live Matches")
-    matches = get_cached_matches()
+def render_live_matches():
+    st.header("📺 Ongoing Matches")
+    matches = fetch_live_matches()
+
     if not matches:
-        st.warning("No live matches at the moment.")
+        st.info("No live matches available.")
         return
+
     for match in matches:
-        st.subheader(match.get("name", "Unknown Match"))
+        st.subheader(match.get("name", "Unnamed Match"))
         st.markdown(f"**Status:** {match.get('status', 'N/A')}")
-        st.markdown(f"**Venue:** {match.get('venue', 'N/A')}")
-        st.markdown(f"**Teams:** {match.get('teamInfo', [{}])[0].get('name')} vs {match.get('teamInfo', [{}])[1].get('name')}")
+        st.markdown(f"**Venue:** {match.get('venue', 'Unknown')}")
+        team_info = match.get("teamInfo", [])
+        if len(team_info) == 2:
+            st.markdown(f"**Teams:** {team_info[0].get('name')} vs {team_info[1].get('name')}")
+        else:
+            st.markdown("**Teams:** Info not available")
+
         if 'score' in match:
             st.markdown(f"**Score:** {match['score']}")
         elif 'scorecard' in match:
             st.json(match['scorecard'])
         else:
-            st.markdown("**Score:** Not available")
-        with st.expander("Show Raw Data"):
+            st.markdown("**Score:** Not Available")
+
+        with st.expander("Show Full Match JSON"):
             st.json(match)
         st.divider()
 
-def show_top11_predictor():
-    st.header("🔮 Top 11 Player Predictor")
-    matches = get_cached_matches()
+def render_top_11():
+    st.header("🔮 Predict Top 11 Players")
+    matches = fetch_live_matches()
+
     if not matches:
-        st.warning("No matches available for prediction.")
+        st.warning("No match data available for prediction.")
         return
 
-    match_dict = {match.get("name", "Unknown"): match for match in matches}
-    selected_match_key = st.selectbox("Select a Match", list(match_dict.keys()))
-    selected_match = match_dict[selected_match_key]
+    match_map = {match.get("name", "Unknown Match"): match for match in matches}
+    chosen_match = st.selectbox("Choose a Match", list(match_map.keys()))
+    match_data = match_map[chosen_match]
 
     try:
-        prediction = prediction_engine.predict_top_players(selected_match)
-        st.success("Top 11 players predicted successfully!")
-        st.write(prediction)
+        top_players = prediction_engine.predict_top_players(match_data)
+        st.success("Top 11 players predicted:")
+        st.write(top_players)
     except Exception as e:
-        st.error(f"Prediction failed: {str(e)}")
+        st.error(f"Prediction Error: {e}")
 
-def show_match_details():
-    st.header("📊 Match Details")
+def render_match_details():
+    st.header("📊 Detailed Match Information")
+    matches = fetch_live_matches()
 
-    matches = get_cached_matches()
     if not matches:
-        st.warning("No matches available for detailed view.")
+        st.warning("No data to show.")
         return
 
-    match_dict = {
-        match.get("name", "Unknown"): match for match in matches
-    }
+    match_map = {match.get("name", "Unnamed Match"): match for match in matches}
+    selected_match = st.selectbox("Choose a Match", list(match_map.keys()))
+    match = match_map[selected_match]
 
-    selected_match_key = st.selectbox("Select a Match", list(match_dict.keys()))
-    selected_match = match_dict[selected_match_key]
+    st.subheader(match.get("name", "Match Details"))
+    st.markdown(f"**Status:** {match.get('status', 'N/A')}")
+    st.markdown(f"**Venue:** {match.get('venue', 'Unknown')}")
+    st.markdown(f"**Format:** {match.get('format', 'Unknown')}")
 
-    st.subheader(f"Details for: {selected_match.get('name', 'Unknown Match')}")
-    st.markdown(f"**Status:** {selected_match.get('status', 'N/A')}")
-    st.markdown(f"**Venue:** {selected_match.get('venue', 'Unknown')}")
-    st.markdown(f"**Format:** {selected_match.get('format', 'Unknown')}")
-    st.markdown(f"**Teams:** {selected_match.get('teamInfo', [{}])[0].get('name')} vs {selected_match.get('teamInfo', [{}])[1].get('name')}")
+    if 'teamInfo' in match and len(match['teamInfo']) == 2:
+        st.markdown(f"**Teams:** {match['teamInfo'][0].get('name')} vs {match['teamInfo'][1].get('name')}")
 
-    if 'score' in selected_match:
-        st.write("**Live Score:**")
-        st.code(selected_match['score'])
+    if 'score' in match:
+        st.code(match['score'])
     else:
         st.info("Live score not available.")
 
-    with st.expander("🔍 Raw Match JSON Data"):
-        st.json(selected_match)
+    with st.expander("Raw JSON Data"):
+        st.json(match)
 
-def show_custom_prediction():
-    st.header("✍️ Custom Player Prediction")
+def render_custom_prediction():
+    st.header("✍️ Custom Player Potential Calculator")
 
-    with st.form("custom_form"):
+    with st.form("player_form"):
         name = st.text_input("Player Name")
-        age = st.number_input("Age", min_value=15, max_value=50, value=25)
+        age = st.slider("Age", 15, 50, 25)
         matches = st.number_input("Matches Played", min_value=0, value=10)
         runs = st.number_input("Total Runs", min_value=0, value=500)
         wickets = st.number_input("Total Wickets", min_value=0, value=10)
-        batting_style = st.selectbox("Batting Style", ["Right-hand bat", "Left-hand bat"])
-        bowling_style = st.selectbox("Bowling Style", ["Right-arm fast", "Left-arm spin", "None"])
-        submit = st.form_submit_button("Predict")
+        batting = st.selectbox("Batting Style", ["Right-hand bat", "Left-hand bat"])
+        bowling = st.selectbox("Bowling Style", ["Right-arm fast", "Left-arm spin", "None"])
+        submit = st.form_submit_button("Predict Potential")
 
     if submit:
-        player_data = {
+        player_input = {
             "name": name,
             "age": age,
             "matches": matches,
             "runs": runs,
             "wickets": wickets,
-            "batting_style": batting_style,
-            "bowling_style": bowling_style,
+            "batting_style": batting,
+            "bowling_style": bowling,
         }
         try:
-            prediction = prediction_engine.predict_custom_player(player_data)
-            st.success("Prediction Successful!")
-            st.write(prediction)
+            result = prediction_engine.predict_custom_player(player_input)
+            st.success("Prediction Result:")
+            st.write(result)
         except Exception as e:
-            st.error(f"Failed to predict: {str(e)}")
+            st.error(f"Error: {e}")
 
-# Routing
-if page == "Live Matches":
-    show_live_matches()
-elif page == "Top 11 Predictor":
-    show_top11_predictor()
-elif page == "Match Details":
-    show_match_details()
-elif page == "Custom Player Prediction":
-    show_custom_prediction()
+# Routing based on selected page
+if selected_page == "Live Matches":
+    render_live_matches()
+elif selected_page == "Top 11 Predictor":
+    render_top_11()
+elif selected_page == "Match Details":
+    render_match_details()
+elif selected_page == "Custom Player Prediction":
+    render_custom_prediction()
